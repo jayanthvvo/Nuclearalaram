@@ -39,7 +39,7 @@ class TrapActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 1. SMASH THROUGH THE LOCK SCREEN (Google's Official Method)
+        // SMASH THROUGH THE LOCK SCREEN
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -55,7 +55,7 @@ class TrapActivity : AppCompatActivity() {
         }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        // 2. FULL IMMERSIVE MODE (Hides status bar and navigation bar)
+        // FULL IMMERSIVE MODE
         @Suppress("DEPRECATION")
         window.decorView.systemUiVisibility = (
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
@@ -70,25 +70,27 @@ class TrapActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("AlarmPrefs", MODE_PRIVATE)
         val isPenalty = intent.getBooleanExtra("PENALTY_MODE", false)
         val wasActive = prefs.getBoolean("IS_ACTIVE", false)
+        val penaltyCount = prefs.getInt("PENALTY_COUNT", 15)
 
         if (wasActive || isPenalty) {
-            requiredProblems = 15 // Re-aligned with your Service penalty logic
+            requiredProblems = penaltyCount
         } else {
             prefs.edit().putBoolean("IS_ACTIVE", true).apply()
+            requiredProblems = 5
         }
 
-        setupUI()
+        setupUI(wasActive || isPenalty)
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         startLocationTracking()
         generateProblem()
     }
 
-    private fun setupUI() {
+    private fun setupUI(isPenaltyMode: Boolean) {
         val overlayLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setBackgroundColor(if (requiredProblems == 15) Color.parseColor("#440000") else Color.BLACK)
+            setBackgroundColor(if (isPenaltyMode) Color.parseColor("#440000") else Color.BLACK)
         }
 
         statusText = TextView(this).apply {
@@ -126,20 +128,20 @@ class TrapActivity : AppCompatActivity() {
         setContentView(overlayLayout)
     }
 
-    // THE HARDWARE SWALLOWER
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val blockedKeys = listOf(KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_MUTE, KeyEvent.KEYCODE_BACK)
         if (event.keyCode in blockedKeys) return true
         return super.dispatchKeyEvent(event)
     }
 
-    // Block the native back button
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() { }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (!hasFocus) sendBroadcast(Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS))
+        if (!hasFocus) {
+            try { sendBroadcast(Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)) } catch (e: SecurityException) { }
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -171,10 +173,7 @@ class TrapActivity : AppCompatActivity() {
             statusText.text = "Safe Zone Verified."
             statusText.setTextColor(Color.GREEN)
 
-            // NEW: Auto-unlock if math is already done
-            if (problemsSolved >= requiredProblems) {
-                unlockAndStop()
-            }
+            if (problemsSolved >= requiredProblems) unlockAndStop()
         } else {
             isAtSafeZone = false
             statusText.text = "Move to Safe Zone! (${distance.toInt()}m away)"
@@ -205,14 +204,11 @@ class TrapActivity : AppCompatActivity() {
                 if (isAtSafeZone) {
                     unlockAndStop()
                 } else {
-                    // NEW: Freeze streak, hide buttons, wait for GPS
                     problemsSolved = requiredProblems
-                    for (btn in buttons) {
-                        btn.visibility = View.INVISIBLE
-                    }
+                    for (btn in buttons) btn.visibility = View.INVISIBLE
                     mathProblemText.text = "MATH COMPLETE!\n\nNow walk to the safe zone or wait for GPS signal..."
                     mathProblemText.setTextColor(Color.YELLOW)
-                    return // Stop generating new problems
+                    return
                 }
             }
         } else {
@@ -223,14 +219,9 @@ class TrapActivity : AppCompatActivity() {
     }
 
     private fun unlockAndStop() {
-        // Clear the cheat-tracker
         getSharedPreferences("AlarmPrefs", MODE_PRIVATE).edit().putBoolean("IS_ACTIVE", false).apply()
         fusedLocationClient.removeLocationUpdates(locationCallback)
-
-        // KILL THE BACKGROUND ENGINE
         stopService(Intent(this, AlarmTrapService::class.java))
-
-        // Destroy this screen
         finish()
     }
 }

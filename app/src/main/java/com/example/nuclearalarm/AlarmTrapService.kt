@@ -38,18 +38,18 @@ class AlarmTrapService : Service() {
     private lateinit var overlayLayout: LinearLayout
     private var mediaPlayer: MediaPlayer? = null
 
-    // The "Final Boss" Enforcers
+    // Enforcers
     private lateinit var wakeLock: PowerManager.WakeLock
     private var volumeThread: Thread? = null
     private var isAlarmRunning = true
     private var screenReceiver: BroadcastReceiver? = null
 
-    // GPS Tracking
+    // Tracking
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
     private var isAtSafeZone = false
 
-    // Math Logic
+    // Logic
     private var problemsSolved = 0
     private var requiredProblems = 5
     private var correctAns = 0
@@ -69,14 +69,12 @@ class AlarmTrapService : Service() {
 
         val powerManager = getSystemService(POWER_SERVICE) as PowerManager
 
-        // 1. The Main WakeLock (Forces screen on)
         wakeLock = powerManager.newWakeLock(
             PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
             "NuclearAlarm::TrapWakeLock"
         )
         wakeLock.acquire(30 * 60 * 1000L) // Max 30 mins
 
-        // 2. The Screen-Off Trap (Fights the Power Button short press)
         screenReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 if (intent?.action == Intent.ACTION_SCREEN_OFF) {
@@ -101,11 +99,12 @@ class AlarmTrapService : Service() {
         val prefs = getSharedPreferences("AlarmPrefs", MODE_PRIVATE)
         val wasActive = prefs.getBoolean("IS_ACTIVE", false)
         val isPenalty = intent?.getBooleanExtra("PENALTY_MODE", false) ?: false
+        val penaltyCount = prefs.getInt("PENALTY_COUNT", 15)
 
         if (wasActive || isPenalty) {
-            requiredProblems = 15 // Penalty: Triple the difficulty
-            overlayLayout.setBackgroundColor(Color.parseColor("#440000")) // Flash Dark Red
-            statusText.text = "REBOOT PENALTY.\nSolve 15 + Reach Safe Zone."
+            requiredProblems = penaltyCount
+            overlayLayout.setBackgroundColor(Color.parseColor("#440000"))
+            statusText.text = "REBOOT PENALTY.\nSolve $requiredProblems + Reach Safe Zone."
         } else {
             prefs.edit().putBoolean("IS_ACTIVE", true).apply()
             requiredProblems = 5
@@ -122,7 +121,6 @@ class AlarmTrapService : Service() {
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
 
-        // The Wake-Up Kick: Forces Android out of deep sleep
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
@@ -132,15 +130,14 @@ class AlarmTrapService : Service() {
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setFullScreenIntent(pendingIntent, true) // <--- Forces screen wake
+            .setFullScreenIntent(pendingIntent, true)
             .build()
         startForeground(1, notification)
     }
 
-    @SuppressLint("MissingPermission") // Silences the Google security warning
+    @SuppressLint("MissingPermission")
     private fun startBulletproofVolumeEnforcer() {
         val audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
-
         val maxAlarm = audioManager.getStreamMaxVolume(AudioManager.STREAM_ALARM)
         val maxMusic = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
         val maxRing = audioManager.getStreamMaxVolume(AudioManager.STREAM_RING)
@@ -159,26 +156,17 @@ class AlarmTrapService : Service() {
         }
 
         isAlarmRunning = true
-
-        // 3. The Universal Hammer & Dialog Destroyer Thread
         volumeThread = Thread {
             while (isAlarmRunning) {
                 try {
-                    // Hammer the volumes to max
                     audioManager.setStreamVolume(AudioManager.STREAM_ALARM, maxAlarm, 0)
                     audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, maxMusic, 0)
                     audioManager.setStreamVolume(AudioManager.STREAM_RING, maxRing, 0)
 
-                    // VAPORIZE THE POWER MENU (Wrapped in try-catch to prevent crashes)
-                    try {
-                        sendBroadcast(Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS))
-                    } catch (e: SecurityException) {
-                        // Ignore Google's block and keep hammering the volume
-                    }
-
-                    Thread.sleep(100) // Strike every 0.1 seconds
+                    try { sendBroadcast(Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)) } catch (e: SecurityException) { }
+                    Thread.sleep(100)
                 } catch (e: InterruptedException) {
-                    break // Stop safely
+                    break
                 }
             }
         }
@@ -188,12 +176,9 @@ class AlarmTrapService : Service() {
     @SuppressLint("MissingPermission")
     private fun startLocationTracking() {
         val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000).build()
-
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
-                for (location in locationResult.locations) {
-                    checkIfInSafeZone(location)
-                }
+                for (location in locationResult.locations) checkIfInSafeZone(location)
             }
         }
         fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
@@ -209,21 +194,15 @@ class AlarmTrapService : Service() {
             return
         }
 
-        val targetLoc = Location("").apply {
-            latitude = targetLat
-            longitude = targetLng
-        }
-
+        val targetLoc = Location("").apply { latitude = targetLat; longitude = targetLng }
         val distance = currentLoc.distanceTo(targetLoc)
+
         if (distance < 15) {
             isAtSafeZone = true
             statusText.text = "Safe Zone Verified."
             statusText.setTextColor(Color.GREEN)
 
-            // NEW: Auto-unlock if math is already done
-            if (problemsSolved >= requiredProblems) {
-                unlockAndStop()
-            }
+            if (problemsSolved >= requiredProblems) unlockAndStop()
         } else {
             isAtSafeZone = false
             statusText.text = "Move to Safe Zone! (${distance.toInt()}m away)"
@@ -232,38 +211,24 @@ class AlarmTrapService : Service() {
     }
 
     @Suppress("DEPRECATION")
-    @SuppressLint("MissingPermission") // Silences the Google security warning
+    @SuppressLint("MissingPermission")
     private fun setupNuclearUI() {
         overlayLayout = object : LinearLayout(this) {
             override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
                 super.onWindowFocusChanged(hasWindowFocus)
                 if (!hasWindowFocus) {
-                    try {
-                        context.sendBroadcast(Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS))
-                    } catch (e: SecurityException) {
-                        // Ignore
-                    }
+                    try { context.sendBroadcast(Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)) } catch (e: SecurityException) { }
                 }
             }
-
-            // 4. THE HARDWARE SWALLOWER (Eats volume and back button presses)
             override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-                val blockedKeys = listOf(
-                    KeyEvent.KEYCODE_VOLUME_DOWN,
-                    KeyEvent.KEYCODE_VOLUME_UP,
-                    KeyEvent.KEYCODE_VOLUME_MUTE,
-                    KeyEvent.KEYCODE_BACK
-                )
-                if (event.keyCode in blockedKeys) {
-                    return true
-                }
+                val blockedKeys = listOf(KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_MUTE, KeyEvent.KEYCODE_BACK)
+                if (event.keyCode in blockedKeys) return true
                 return super.dispatchKeyEvent(event)
             }
         }.apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setBackgroundColor(Color.BLACK)
-
             isFocusableInTouchMode = true
             requestFocus()
         }
@@ -322,7 +287,6 @@ class AlarmTrapService : Service() {
         correctAns = (a * b) + c
 
         mathProblemText.text = "Streak: $problemsSolved / $requiredProblems\n($a × $b) + $c = ?"
-
         val answers = mutableListOf(correctAns, correctAns + Random.nextInt(10, 50), correctAns - Random.nextInt(10, 50)).shuffled()
 
         for (i in 0..2) {
@@ -339,14 +303,11 @@ class AlarmTrapService : Service() {
                 if (isAtSafeZone) {
                     unlockAndStop()
                 } else {
-                    // NEW: Freeze streak, hide buttons, wait for GPS
                     problemsSolved = requiredProblems
-                    for (btn in buttons) {
-                        btn.visibility = View.INVISIBLE
-                    }
+                    for (btn in buttons) btn.visibility = View.INVISIBLE
                     mathProblemText.text = "MATH COMPLETE!\n\nNow walk to the safe zone or wait for GPS signal..."
                     mathProblemText.setTextColor(Color.YELLOW)
-                    return // Stop generating new problems
+                    return
                 }
             }
         } else {
@@ -365,9 +326,7 @@ class AlarmTrapService : Service() {
         super.onDestroy()
         isAlarmRunning = false
         volumeThread?.interrupt()
-
         screenReceiver?.let { unregisterReceiver(it) }
-
         if (wakeLock.isHeld) wakeLock.release()
         fusedLocationClient.removeLocationUpdates(locationCallback)
         mediaPlayer?.stop()

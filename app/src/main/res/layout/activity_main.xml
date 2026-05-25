@@ -30,7 +30,37 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Set Current Location as Safe Zone"
-            android:backgroundTint="@android:color/holo_green_dark"/>
+            android:backgroundTint="@android:color/holo_green_dark"
+            android:layout_marginBottom="16dp"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Reboot Penalty (Math Problems):"
+            android:textColor="@android:color/white"
+            android:textStyle="bold"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/penaltyCountInput"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:textColor="@android:color/white"
+                android:hint="Default is 15"
+                android:textColorHint="#888888"/>
+
+            <Button
+                android:id="@+id/savePenaltyButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Save Penalty"/>
+        </LinearLayout>
     </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView

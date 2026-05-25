@@ -71,6 +71,28 @@ class MainActivity : AppCompatActivity() {
             setSafeZoneToCurrentLocation()
         }
 
+        // --- Handle Penalty Settings ---
+        val penaltyInput = findViewById<android.widget.EditText>(R.id.penaltyCountInput)
+        val savePenaltyBtn = findViewById<Button>(R.id.savePenaltyButton)
+
+        // Load the saved penalty amount (defaults to 15) when app opens
+        val prefs = getSharedPreferences("AlarmPrefs", MODE_PRIVATE)
+        penaltyInput.setText(prefs.getInt("PENALTY_COUNT", 15).toString())
+
+        // Save it when the button is clicked
+        savePenaltyBtn.setOnClickListener {
+            val countStr = penaltyInput.text.toString()
+            if (countStr.isNotEmpty()) {
+                val count = countStr.toIntOrNull() ?: 15
+                prefs.edit().putInt("PENALTY_COUNT", count).apply()
+                Toast.makeText(this, "Reboot Penalty set to $count problems!", Toast.LENGTH_SHORT).show()
+
+                // Close the keyboard
+                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+                imm.hideSoftInputFromWindow(penaltyInput.windowToken, 0)
+            }
+        }
+
         // 3. Aggressive Permission Checks
         checkAndRequestPermissions()
     }
@@ -148,8 +170,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // --- EVERYTHING BELOW IS YOUR EXISTING RECYCLERVIEW / ALARM LOGIC ---
-
     private fun setupRecyclerView() {
         val recyclerView = findViewById<RecyclerView>(R.id.alarmRecyclerView)
         recyclerView.layoutManager = LinearLayoutManager(this)
@@ -164,8 +184,7 @@ class MainActivity : AppCompatActivity() {
         CoroutineScope(Dispatchers.IO).launch {
             val alarms = db.alarmDao().getAllAlarms()
             withContext(Dispatchers.Main) {
-                // Changed from updateData to updateAlarms to match your Adapter!
-                adapter.updateAlarms(alarms)
+                adapter.updateAlarms(alarms) // Using the correct method name
             }
         }
     }
