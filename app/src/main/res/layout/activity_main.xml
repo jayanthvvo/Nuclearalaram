@@ -61,6 +61,79 @@
                 android:layout_height="wrap_content"
                 android:text="Save Penalty"/>
         </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Auto-Stop Timer (Minutes, 0 = Never):"
+            android:textColor="@android:color/white"
+            android:textStyle="bold"
+            android:layout_marginTop="12dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/autoStopInput"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:textColor="@android:color/white"
+                android:hint="Default is 0 (Never)"
+                android:textColorHint="#888888"/>
+
+            <Button
+                android:id="@+id/saveAutoStopButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Save Timer"/>
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Math Difficulty:"
+            android:textColor="@android:color/white"
+            android:textStyle="bold"
+            android:layout_marginTop="12dp"/>
+
+        <RadioGroup
+            android:id="@+id/difficultyRadioGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="4dp">
+
+            <RadioButton
+                android:id="@+id/radioEasy"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Easy"
+                android:textColor="@android:color/white"
+                android:buttonTint="@android:color/white"
+                android:layout_weight="1"/>
+
+            <RadioButton
+                android:id="@+id/radioMedium"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Medium"
+                android:textColor="@android:color/white"
+                android:buttonTint="@android:color/white"
+                android:layout_weight="1"/>
+
+            <RadioButton
+                android:id="@+id/radioHard"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Hard"
+                android:textColor="@android:color/white"
+                android:buttonTint="@android:color/white"
+                android:layout_weight="1"/>
+        </RadioGroup>
     </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView

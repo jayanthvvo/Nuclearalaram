@@ -14,11 +14,11 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Button
+import android.widget.RadioGroup
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -40,7 +40,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var safeZoneStatusText: TextView
 
-    // Normal permissions launcher (Location, Notifications)
+    // Normal permissions launcher
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -71,30 +71,72 @@ class MainActivity : AppCompatActivity() {
             setSafeZoneToCurrentLocation()
         }
 
+        val prefs = getSharedPreferences("AlarmPrefs", MODE_PRIVATE)
+
         // --- Handle Penalty Settings ---
         val penaltyInput = findViewById<android.widget.EditText>(R.id.penaltyCountInput)
         val savePenaltyBtn = findViewById<Button>(R.id.savePenaltyButton)
-
-        // Load the saved penalty amount (defaults to 15) when app opens
-        val prefs = getSharedPreferences("AlarmPrefs", MODE_PRIVATE)
         penaltyInput.setText(prefs.getInt("PENALTY_COUNT", 15).toString())
 
-        // Save it when the button is clicked
         savePenaltyBtn.setOnClickListener {
             val countStr = penaltyInput.text.toString()
             if (countStr.isNotEmpty()) {
                 val count = countStr.toIntOrNull() ?: 15
                 prefs.edit().putInt("PENALTY_COUNT", count).apply()
                 Toast.makeText(this, "Reboot Penalty set to $count problems!", Toast.LENGTH_SHORT).show()
-
-                // Close the keyboard
-                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
-                imm.hideSoftInputFromWindow(penaltyInput.windowToken, 0)
+                closeKeyboard(penaltyInput)
             }
+        }
+
+        // --- Handle Auto-Stop Settings ---
+        val autoStopInput = findViewById<android.widget.EditText>(R.id.autoStopInput)
+        val saveAutoStopBtn = findViewById<Button>(R.id.saveAutoStopButton)
+        autoStopInput.setText(prefs.getInt("AUTO_STOP_MINUTES", 0).toString())
+
+        saveAutoStopBtn.setOnClickListener {
+            val countStr = autoStopInput.text.toString()
+            if (countStr.isNotEmpty()) {
+                val minutes = countStr.toIntOrNull() ?: 0
+                prefs.edit().putInt("AUTO_STOP_MINUTES", minutes).apply()
+
+                if (minutes == 0) {
+                    Toast.makeText(this, "Auto-Stop Disabled (Rings Forever)", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "Alarm will auto-stop after $minutes minutes!", Toast.LENGTH_SHORT).show()
+                }
+                closeKeyboard(autoStopInput)
+            }
+        }
+
+        // --- NEW: Handle Math Difficulty Settings ---
+        val difficultyGroup = findViewById<RadioGroup>(R.id.difficultyRadioGroup)
+
+        // Load the saved difficulty (0 = Easy, 1 = Medium, 2 = Hard). Default to Medium (1).
+        when (prefs.getInt("MATH_DIFFICULTY", 1)) {
+            0 -> difficultyGroup.check(R.id.radioEasy)
+            1 -> difficultyGroup.check(R.id.radioMedium)
+            2 -> difficultyGroup.check(R.id.radioHard)
+        }
+
+        // Save it instantly whenever the user taps a different option
+        difficultyGroup.setOnCheckedChangeListener { _, checkedId ->
+            val difficulty = when (checkedId) {
+                R.id.radioEasy -> 0
+                R.id.radioMedium -> 1
+                R.id.radioHard -> 2
+                else -> 1
+            }
+            prefs.edit().putInt("MATH_DIFFICULTY", difficulty).apply()
+            Toast.makeText(this, "Difficulty Saved!", Toast.LENGTH_SHORT).show()
         }
 
         // 3. Aggressive Permission Checks
         checkAndRequestPermissions()
+    }
+
+    private fun closeKeyboard(view: android.view.View) {
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+        imm.hideSoftInputFromWindow(view.windowToken, 0)
     }
 
     private fun checkAndRequestPermissions() {
@@ -115,18 +157,10 @@ class MainActivity : AppCompatActivity() {
             requestPermissionLauncher.launch(permissionsToRequest.toTypedArray())
         }
 
-        // Check Display Over Other Apps (SYSTEM_ALERT_WINDOW)
         if (!Settings.canDrawOverlays(this)) {
             Toast.makeText(this, "Please allow 'Display over other apps' to let the alarm lock your screen.", Toast.LENGTH_LONG).show()
             val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
             startActivity(intent)
-        }
-
-        // Check Exact Alarm Permission (Android 12+)
-        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
-            Toast.makeText(this, "Please allow 'Alarms & Reminders' for accurate timing.", Toast.LENGTH_LONG).show()
-            startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
         }
     }
 
@@ -184,7 +218,7 @@ class MainActivity : AppCompatActivity() {
         CoroutineScope(Dispatchers.IO).launch {
             val alarms = db.alarmDao().getAllAlarms()
             withContext(Dispatchers.Main) {
-                adapter.updateAlarms(alarms) // Using the correct method name
+                adapter.updateAlarms(alarms)
             }
         }
     }
@@ -231,6 +265,12 @@ class MainActivity : AppCompatActivity() {
             set(Calendar.MINUTE, minute)
             set(Calendar.SECOND, 0)
             if (before(Calendar.getInstance())) add(Calendar.DATE, 1)
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+            Toast.makeText(this, "PLEASE ALLOW EXACT ALARMS IN SETTINGS", Toast.LENGTH_LONG).show()
+            startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
+            return
         }
 
         alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pendingIntent)

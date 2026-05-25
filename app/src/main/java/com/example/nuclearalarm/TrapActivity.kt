@@ -181,14 +181,39 @@ class TrapActivity : AppCompatActivity() {
         }
     }
 
+    // --- NEW: Difficulty-Based Math Generator ---
     private fun generateProblem() {
-        val a = Random.nextInt(15, 50)
-        val b = Random.nextInt(15, 50)
-        val c = Random.nextInt(100, 500)
+        val prefs = getSharedPreferences("AlarmPrefs", MODE_PRIVATE)
+        val difficulty = prefs.getInt("MATH_DIFFICULTY", 1) // 0=Easy, 1=Medium, 2=Hard
+
+        val a: Int
+        val b: Int
+        val c: Int
+
+        when (difficulty) {
+            0 -> { // Easy
+                a = Random.nextInt(2, 10)
+                b = Random.nextInt(2, 10)
+                c = Random.nextInt(10, 50)
+            }
+            2 -> { // Hard
+                a = Random.nextInt(50, 100)
+                b = Random.nextInt(50, 100)
+                c = Random.nextInt(500, 1000)
+            }
+            else -> { // Medium (Default)
+                a = Random.nextInt(15, 50)
+                b = Random.nextInt(15, 50)
+                c = Random.nextInt(100, 500)
+            }
+        }
+
         correctAns = (a * b) + c
 
         mathProblemText.text = "Streak: $problemsSolved / $requiredProblems\n($a × $b) + $c = ?"
-        val answers = mutableListOf(correctAns, correctAns + Random.nextInt(10, 50), correctAns - Random.nextInt(10, 50)).shuffled()
+
+        // Generate answers safely
+        val answers = mutableListOf(correctAns, correctAns + Random.nextInt(5, 20), correctAns - Random.nextInt(5, 20)).shuffled()
 
         for (i in 0..2) {
             buttons[i].text = answers[i].toString()

@@ -30,6 +30,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.google.android.gms.location.*
+import kotlinx.coroutines.*
 import kotlin.random.Random
 
 class AlarmTrapService : Service() {
@@ -43,6 +44,9 @@ class AlarmTrapService : Service() {
     private var volumeThread: Thread? = null
     private var isAlarmRunning = true
     private var screenReceiver: BroadcastReceiver? = null
+
+    // Auto Stop Timer
+    private var autoStopJob: Job? = null
 
     // Tracking
     private lateinit var fusedLocationClient: FusedLocationProviderClient
@@ -111,6 +115,20 @@ class AlarmTrapService : Service() {
         }
 
         generateProblem()
+
+        // --- Auto-Stop Countdown ---
+        val autoStopMinutes = prefs.getInt("AUTO_STOP_MINUTES", 0)
+        if (autoStopMinutes > 0) {
+            autoStopJob = CoroutineScope(Dispatchers.Main).launch {
+                delay(autoStopMinutes * 60 * 1000L)
+
+                if (isAlarmRunning) {
+                    Toast.makeText(this@AlarmTrapService, "Alarm Auto-Stopped after $autoStopMinutes minutes.", Toast.LENGTH_LONG).show()
+                    unlockAndStop()
+                }
+            }
+        }
+
         return START_STICKY
     }
 
@@ -121,7 +139,7 @@ class AlarmTrapService : Service() {
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
 
-        val intent = Intent(this, MainActivity::class.java)
+        val intent = Intent(this, TrapActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
         val notification = NotificationCompat.Builder(this, channelId)
@@ -280,14 +298,38 @@ class AlarmTrapService : Service() {
         windowManager.addView(overlayLayout, params)
     }
 
+    // --- NEW: Difficulty-Based Math Generator ---
     private fun generateProblem() {
-        val a = Random.nextInt(15, 50)
-        val b = Random.nextInt(15, 50)
-        val c = Random.nextInt(100, 500)
+        val prefs = getSharedPreferences("AlarmPrefs", MODE_PRIVATE)
+        val difficulty = prefs.getInt("MATH_DIFFICULTY", 1) // 0=Easy, 1=Medium, 2=Hard
+
+        val a: Int
+        val b: Int
+        val c: Int
+
+        when (difficulty) {
+            0 -> { // Easy
+                a = Random.nextInt(2, 10)
+                b = Random.nextInt(2, 10)
+                c = Random.nextInt(10, 50)
+            }
+            2 -> { // Hard
+                a = Random.nextInt(50, 100)
+                b = Random.nextInt(50, 100)
+                c = Random.nextInt(500, 1000)
+            }
+            else -> { // Medium (Default)
+                a = Random.nextInt(15, 50)
+                b = Random.nextInt(15, 50)
+                c = Random.nextInt(100, 500)
+            }
+        }
+
         correctAns = (a * b) + c
 
         mathProblemText.text = "Streak: $problemsSolved / $requiredProblems\n($a × $b) + $c = ?"
-        val answers = mutableListOf(correctAns, correctAns + Random.nextInt(10, 50), correctAns - Random.nextInt(10, 50)).shuffled()
+
+        val answers = mutableListOf(correctAns, correctAns + Random.nextInt(5, 20), correctAns - Random.nextInt(5, 20)).shuffled()
 
         for (i in 0..2) {
             buttons[i].text = answers[i].toString()
@@ -325,6 +367,7 @@ class AlarmTrapService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         isAlarmRunning = false
+        autoStopJob?.cancel()
         volumeThread?.interrupt()
         screenReceiver?.let { unregisterReceiver(it) }
         if (wakeLock.isHeld) wakeLock.release()
