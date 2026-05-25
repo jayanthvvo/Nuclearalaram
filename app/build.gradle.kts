@@ -1,14 +1,15 @@
 plugins {
     alias(libs.plugins.android.application)
+
+    // We only need to add Kapt here. Kotlin is already handled by your project!
+    kotlin("kapt")
 }
 
 android {
     namespace = "com.example.nuclearalarm"
-    compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
-    }
+
+    // Using your original SDK versions
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.nuclearalarm"
@@ -33,6 +34,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+    kotlinOptions {
+        jvmTarget = "11"
+    }
 }
 
 dependencies {
@@ -45,4 +49,9 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     implementation("com.google.android.gms:play-services-location:21.0.1")
+
+    // Room database dependencies
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    kapt(libs.room.compiler)
 }
