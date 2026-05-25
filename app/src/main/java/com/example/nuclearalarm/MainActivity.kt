@@ -22,6 +22,10 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import com.google.android.gms.location.LocationServices
 import java.util.Calendar
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
 
@@ -110,14 +114,38 @@ class MainActivity : AppCompatActivity() {
     private fun openTimePicker() {
         val calendar = Calendar.getInstance()
         TimePickerDialog(this, { _, hourOfDay, minute ->
-            scheduleAlarm(hourOfDay, minute)
+
+            // Run database insertion in the background
+            CoroutineScope(Dispatchers.IO).launch {
+                val db = AppDatabase.getDatabase(this@MainActivity)
+                val newAlarm = AlarmEntity(hour = hourOfDay, minute = minute, isEnabled = true, daysOfWeek = "")
+
+                // Insert and get the unique auto-generated ID
+                val generatedId = db.alarmDao().insertAlarm(newAlarm).toInt()
+
+                // Switch back to the main thread to schedule the alarm and show UI updates
+                withContext(Dispatchers.Main) {
+                    scheduleAlarm(hourOfDay, minute, generatedId)
+                }
+            }
+
         }, calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), false).show()
     }
 
-    private fun scheduleAlarm(hourOfDay: Int, minute: Int) {
+    private fun scheduleAlarm(hourOfDay: Int, minute: Int, alarmId: Int) {
         val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = Intent(this, AlarmReceiver::class.java)
-        val pendingIntent = PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val intent = Intent(this, AlarmReceiver::class.java).apply {
+            // Pass the ID so the receiver knows which alarm triggered
+            putExtra("ALARM_ID", alarmId)
+        }
+
+        // IMPORTANT: Use alarmId instead of 0 here!
+        val pendingIntent = PendingIntent.getBroadcast(
+            this,
+            alarmId,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
 
         val calendar = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, hourOfDay)
@@ -133,7 +161,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pendingIntent)
-        getSharedPreferences("AlarmPrefs", Context.MODE_PRIVATE).edit().putBoolean("ALARM_SCHEDULED", true).apply()
 
         statusText.text = "Alarm Set For:\n${String.format("%02d:%02d", hourOfDay, minute)}"
         Toast.makeText(this, "Alarm Scheduled!", Toast.LENGTH_SHORT).show()

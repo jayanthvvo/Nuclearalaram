@@ -72,7 +72,7 @@ class TrapActivity : AppCompatActivity() {
         val wasActive = prefs.getBoolean("IS_ACTIVE", false)
 
         if (wasActive || isPenalty) {
-            requiredProblems = 15
+            requiredProblems = 5
         } else {
             prefs.edit().putBoolean("IS_ACTIVE", true).apply()
         }
