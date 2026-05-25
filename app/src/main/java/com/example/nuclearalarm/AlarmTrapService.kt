@@ -22,6 +22,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.View
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
@@ -216,8 +217,13 @@ class AlarmTrapService : Service() {
         val distance = currentLoc.distanceTo(targetLoc)
         if (distance < 15) {
             isAtSafeZone = true
-            statusText.text = "Safe Zone Verified. Finish the math."
+            statusText.text = "Safe Zone Verified."
             statusText.setTextColor(Color.GREEN)
+
+            // NEW: Auto-unlock if math is already done
+            if (problemsSolved >= requiredProblems) {
+                unlockAndStop()
+            }
         } else {
             isAtSafeZone = false
             statusText.text = "Move to Safe Zone! (${distance.toInt()}m away)"
@@ -298,7 +304,6 @@ class AlarmTrapService : Service() {
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            // REMOVED FLAG_NOT_FOCUSABLE SO BUTTON SWALLOWER WORKS
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                     WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
                     WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
@@ -334,8 +339,14 @@ class AlarmTrapService : Service() {
                 if (isAtSafeZone) {
                     unlockAndStop()
                 } else {
-                    Toast.makeText(this, "Math done, but YOU ARE NOT IN THE SAFE ZONE!", Toast.LENGTH_LONG).show()
-                    problemsSolved = requiredProblems - 1
+                    // NEW: Freeze streak, hide buttons, wait for GPS
+                    problemsSolved = requiredProblems
+                    for (btn in buttons) {
+                        btn.visibility = View.INVISIBLE
+                    }
+                    mathProblemText.text = "MATH COMPLETE!\n\nNow walk to the safe zone or wait for GPS signal..."
+                    mathProblemText.setTextColor(Color.YELLOW)
+                    return // Stop generating new problems
                 }
             }
         } else {
